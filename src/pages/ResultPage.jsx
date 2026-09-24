@@ -7,9 +7,6 @@ export default function ResultPage({ result, onHome }) {
   const unanswered = total - answered;
   const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-  // Gabungin soal + jawaban jadi satu daftar rincian, termasuk soal yang
-  // nggak sempat dijawab (mis. waktu habis duluan) — bukan cuma yang ada
-  // di array `answers`.
   const detail = questions.map((q, i) => {
     const a = answers[i];
     if (!a) {
@@ -47,7 +44,6 @@ export default function ResultPage({ result, onHome }) {
         </p>
         <h1 className="font-serif text-2xl sm:text-3xl mb-8">Hasil kuis</h1>
 
-        {/* Skor: cincin persentase + ringkasan */}
         <div className="flex flex-col items-center gap-5 border-y border-[#e2d9c3] py-10 mb-8 text-center">
           <div
             className="radial-progress text-[#8a3a3a]"
@@ -76,7 +72,6 @@ export default function ResultPage({ result, onHome }) {
           </div>
         </div>
 
-        {/* Ringkasan angka */}
         <div className="stats stats-vertical sm:stats-horizontal w-full border border-[#e2d9c3] bg-transparent rounded-md mb-10">
           <div className="stat place-items-center py-4">
             <div className="stat-title text-[#8a8371] text-xs">Dijawab</div>
@@ -103,7 +98,6 @@ export default function ResultPage({ result, onHome }) {
           </div>
         </div>
 
-        {/* Rincian jawaban */}
         <div className="mb-10">
           <h2 className="text-xs font-medium text-[#8a8371] mb-4">
             RINCIAN JAWABAN
@@ -119,9 +113,6 @@ export default function ResultPage({ result, onHome }) {
   );
 }
 
-// Warna & label tiap status disatukan di sini biar konsisten dan gampang
-// diubah — badge-nya kecil & di kanan aja, bukan background satu baris penuh,
-// jadi lebih enak dibaca pas rincian jawabannya panjang.
 const STATUS = {
   correct: {
     label: "Benar",

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { generateQuiz } from "../data/kanjiData";
 
 export default function QuizPage({ config, onFinish, onExit }) {
-  // Soal digenerate sekali aja pas halaman ini pertama kali dibuka.
   const [questions] = useState(() =>
     generateQuiz({
       babList: config.babList,
@@ -16,15 +15,13 @@ export default function QuizPage({ config, onFinish, onExit }) {
   const [timeLeft, setTimeLeft] = useState(config.timeLimitSeconds);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Simpan jawaban di ref (bukan cuma state) supaya timer/interval selalu
-  // baca data paling baru, bukan nilai basi dari render pertama.
   const answersRef = useRef([]);
 
   const currentQuestion = questions[currentIndex];
   const total = questions.length;
 
   const finishQuiz = () => {
-    if (isFinished) return; // cegah kepanggil dua kali
+    if (isFinished) return;
     setIsFinished(true);
     onFinish({
       questions,
@@ -33,14 +30,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
     });
   };
 
-  // Timer total kuis (kalau ada batas waktu).
-  // Dipecah jadi dua useEffect: satu buat hitung mundur (murni, cuma update angka),
-  // satu lagi yang "bereaksi" begitu waktu mencapai 0 lalu menyelesaikan kuis.
-  // Ini penting: jangan panggil finishQuiz() dari dalam functional updater
-  // setState (mis. setTimeLeft(prev => { ...; finishQuiz(); })), karena React
-  // (StrictMode, dev mode) boleh memanggil updater itu dua kali untuk cek
-  // kemurniannya — efek samping di dalamnya bikin state jadi tidak konsisten
-  // dan pindah halaman ke hasil jadi gagal diam-diam.
   useEffect(() => {
     if (config.timeLimitSeconds == null) return;
     if (timeLeft <= 0) return;
@@ -57,11 +46,10 @@ export default function QuizPage({ config, onFinish, onExit }) {
     if (timeLeft === 0) {
       finishQuiz();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft]);
 
   const handleSelect = (option) => {
-    if (selected !== null) return; // cegah klik ganda
+    if (selected !== null) return;
 
     setSelected(option);
     const isCorrect = option === currentQuestion.correctAnswer;
@@ -87,7 +75,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
     }, 550);
   };
 
-  // Shortcut keyboard 1-4 buat milih jawaban tanpa mouse.
   useEffect(() => {
     if (!currentQuestion) return;
 
@@ -100,7 +87,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQuestion, selected]);
 
   if (!currentQuestion) {
@@ -135,8 +121,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
   return (
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620] flex flex-col">
       <div className="max-w-2xl w-full mx-auto px-5 sm:px-8 py-8 flex-1 flex flex-col">
-        {/* Header: keluar, progres, timer — grid 3 kolom biar tiap elemen
-            punya jatah ruang sendiri dan nggak dempet di layar sempit */}
         <div className="grid grid-cols-3 items-center gap-2 mb-6">
           <button
             type="button"
@@ -177,7 +161,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
           )}
         </div>
 
-        {/* Progress bar tipis */}
         <div className="h-[3px] w-full bg-[#e2d9c3] rounded-full mb-14 overflow-hidden">
           <div
             className="h-full bg-[#8a3a3a] rounded-full transition-all duration-300"
@@ -185,7 +168,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
           />
         </div>
 
-        {/* Soal */}
         <div className="flex-1 flex flex-col items-center justify-center text-center">
           <p
             className={`font-serif mb-14 ${
@@ -197,16 +179,12 @@ export default function QuizPage({ config, onFinish, onExit }) {
             {currentQuestion.question}
           </p>
 
-          {/* Opsi jawaban */}
           <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentQuestion.options.map((opt, i) => {
               const isSelected = selected === opt;
               const isCorrectOpt = opt === currentQuestion.correctAnswer;
               const showFeedback = selected !== null;
 
-              // Warna teks selalu di-set eksplisit di tiap state — kalau
-              // diserahkan ke default .btn daisyUI, teksnya bisa ikut warna
-              // tema (sering putih) dan jadi nggak kebaca di atas background terang.
               let stateClass =
                 "bg-transparent border-[#e2d9c3] text-[#2b2620] hover:border-[#8a3a3a] hover:bg-[#efe6d2]";
               if (showFeedback && isCorrectOpt) {
@@ -216,8 +194,6 @@ export default function QuizPage({ config, onFinish, onExit }) {
                 stateClass =
                   "bg-[#f6e6e3] border-[#8a3a3a] text-[#2b2620] hover:bg-[#f6e6e3]";
               } else if (showFeedback) {
-                // opsi lain yang nggak dipilih & bukan jawaban benar: dibikin pudar
-                // biar fokus mata tetap ke jawaban yang benar/salah, teks tetap gelap.
                 stateClass =
                   "bg-transparent border-[#e2d9c3] text-[#2b2620]/40";
               }

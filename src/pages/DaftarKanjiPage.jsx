@@ -4,8 +4,6 @@ import { kanjiData } from "../data/kanjiData";
 export default function DaftarKanjiPage({ onBack }) {
   const [query, setQuery] = useState("");
 
-  // Filter jalan di semua bab & item sekaligus. Bab yang hasilnya kosong
-  // ikut disembunyikan, jadi nav bab & sisi kanan selalu sinkron.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return kanjiData;
@@ -26,7 +24,6 @@ export default function DaftarKanjiPage({ onBack }) {
   return (
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620]">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-10 py-8 sm:py-12">
-        {/* Header */}
         <button
           type="button"
           onClick={onBack}
@@ -45,7 +42,6 @@ export default function DaftarKanjiPage({ onBack }) {
           Semua kanji yang dipakai di kuis, dikelompokkan per bab.
         </p>
 
-        {/* Pencarian */}
         <label className="input input-bordered flex items-center gap-2 h-11 rounded-lg border-[#e2d9c3] bg-white/50 px-3.5 mb-8 max-w-md focus-within:border-[#8a3a3a]">
           <SearchIcon className="w-4 h-4 text-[#a39d8a] shrink-0" />
           <input
@@ -57,7 +53,6 @@ export default function DaftarKanjiPage({ onBack }) {
           />
         </label>
 
-        {/* Nav bab versi mobile: chip horizontal yang nempel di atas pas discroll */}
         {filtered.length > 0 && (
           <div className="lg:hidden sticky top-0 z-10 -mx-5 sm:-mx-8 mb-6 bg-[#f6f2e9]/95 backdrop-blur border-b border-[#e2d9c3]">
             <div className="flex gap-2 overflow-x-auto px-5 sm:px-8 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -75,7 +70,6 @@ export default function DaftarKanjiPage({ onBack }) {
         )}
 
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-          {/* Nav bab versi desktop: sidebar sticky */}
           {filtered.length > 0 && (
             <aside className="hidden lg:block lg:w-52 shrink-0">
               <div className="lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto pr-2">
@@ -100,7 +94,6 @@ export default function DaftarKanjiPage({ onBack }) {
             </aside>
           )}
 
-          {/* Konten: satu panel per bab, isinya list baris — bukan kartu-kartu kecil */}
           <main className="flex-1 min-w-0">
             {filtered.length === 0 ? (
               <div className="rounded-xl border border-[#e2d9c3] bg-white/40 px-6 py-14 text-center">

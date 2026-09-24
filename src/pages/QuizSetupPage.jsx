@@ -66,14 +66,8 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
   };
 
   return (
-    // min-h-screen (bukan h-screen + overflow-hidden): di layar yang cukup
-    // tinggi kontennya tetap pas satu layar berkat spacing yang dipadatin,
-    // tapi kalau di layar kecil/mobile kolomnya numpuk jadi lebih tinggi
-    // dari viewport, halaman tetap BISA di-scroll — jangan sampai ada
-    // tombol yang kekubur dan nggak kegapai.
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620]">
       <div className="max-w-5xl w-full mx-auto px-6 sm:px-10 lg:px-10 py-5 sm:py-7">
-        {/* Header */}
         <header className="mb-5 sm:mb-7">
           {onBack && (
             <button
@@ -95,9 +89,7 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
           </p>
         </header>
 
-        {/* Konten: dua kolom di desktop, satu kolom di mobile. */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-14">
-          {/* Kolom kiri: pilih bab */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-3.5">
               <SectionLabel>Pilih bab kanji</SectionLabel>
@@ -152,7 +144,6 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
             </div>
           </div>
 
-          {/* Kolom kanan: pengaturan soal + waktu */}
           <div className="lg:w-80 shrink-0 pt-5 lg:pt-0 pb-2 border-t border-[#e2d9c3] lg:border-t-0 lg:border-l lg:pl-12">
             <div className="mb-5">
               <SectionLabel>Tampilkan soal sebagai</SectionLabel>
@@ -175,8 +166,6 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
             <div className="mb-6">
               <SectionLabel>Batas waktu total kuis</SectionLabel>
 
-              {/* Satu panel pill senada sama TabGroup, bukan kotak-kotak
-                  bordered terpisah — biar nggak keliatan berantakan pas wrap. */}
               <div className="grid grid-cols-3 gap-1 bg-[#efe6d2] p-1 rounded-full mt-3">
                 {WAKTU_OPSI.slice(0, 3).map((opt) => (
                   <TimeChip
@@ -234,8 +223,6 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
   );
 }
 
-// Satu chip di dalam grup "batas waktu" — gaya pill senada TabGroup, nggak
-// pakai border kotak sendiri-sendiri.
 function TimeChip({ opt, active, onClick }) {
   return (
     <button
@@ -254,7 +241,6 @@ function TimeChip({ opt, active, onClick }) {
   );
 }
 
-// Label section dengan garis kecil merah di depan — dipakai konsisten di semua judul bagian.
 function SectionLabel({ children }) {
   return (
     <h2 className="flex items-center gap-2 text-xs font-medium text-[#2b2620] mb-3">
@@ -264,8 +250,6 @@ function SectionLabel({ children }) {
   );
 }
 
-// Grup tab pakai komponen "tabs tabs-boxed" daisyUI (pill segmented control),
-// warna di-override eksplisit biar konsisten sama palet halaman lain.
 function TabGroup({ options, value, onChange }) {
   return (
     <div
