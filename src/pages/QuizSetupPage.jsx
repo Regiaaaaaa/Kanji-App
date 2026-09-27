@@ -13,6 +13,11 @@ const TAMPILAN_JAWABAN = [
   { value: "kanji", label: "Kanji" },
 ];
 
+const JENIS_JAWABAN = [
+  { value: "multiple", label: "Pilihan ganda" },
+  { value: "text", label: "Isian" },
+];
+
 const WAKTU_OPSI = [
   { value: "10", label: "10 dtk" },
   { value: "20", label: "20 dtk" },
@@ -27,8 +32,18 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
   const [selectedBabs, setSelectedBabs] = useState([]);
   const [questionType, setQuestionType] = useState("hiragana");
   const [answerType, setAnswerType] = useState("kanji");
+  const [answerMode, setAnswerMode] = useState("multiple");
   const [timeOption, setTimeOption] = useState("30");
   const [customSeconds, setCustomSeconds] = useState("");
+
+  const isArtiAnswerType = answerType === "arti";
+
+  const handleAnswerTypeChange = (nextType) => {
+    setAnswerType(nextType);
+    if (nextType !== "arti") {
+      setAnswerMode("multiple");
+    }
+  };
 
   const toggleBab = (bab) => {
     setSelectedBabs((prev) =>
@@ -55,6 +70,7 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
       babList: selectedBabs,
       questionType,
       answerType,
+      answerMode: isArtiAnswerType ? answerMode : "multiple",
       timeLimitSeconds,
     };
 
@@ -159,9 +175,20 @@ export default function QuizSetupPage({ onStartQuiz, onBack }) {
               <TabGroup
                 options={TAMPILAN_JAWABAN}
                 value={answerType}
-                onChange={setAnswerType}
+                onChange={handleAnswerTypeChange}
               />
             </div>
+
+            {isArtiAnswerType && (
+              <div className="mb-6">
+                <SectionLabel>Mode jawaban</SectionLabel>
+                <TabGroup
+                  options={JENIS_JAWABAN}
+                  value={answerMode}
+                  onChange={setAnswerMode}
+                />
+              </div>
+            )}
 
             <div className="mb-6">
               <SectionLabel>Batas waktu total kuis</SectionLabel>

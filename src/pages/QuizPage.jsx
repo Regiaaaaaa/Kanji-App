@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { generateQuiz } from "../data/kanjiData";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { generateQuiz, getAnswerVariants } from "../data/kanjiData";
 
 export default function QuizPage({ config, onFinish, onExit }) {
   const [questions] = useState(() =>
@@ -12,23 +12,108 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState(null);
+  const [typedAnswer, setTypedAnswer] = useState("");
+  const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(config.timeLimitSeconds);
   const [isFinished, setIsFinished] = useState(false);
 
   const answersRef = useRef([]);
+  const startTimeRef = useRef(null);
+  
+  useEffect(() => {
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now();
+    }
+  }, []);
 
   const currentQuestion = questions[currentIndex];
   const total = questions.length;
+  const isTextMode = config.answerMode === "text";
 
-  const finishQuiz = () => {
+  const finishQuiz = useCallback(() => {
     if (isFinished) return;
     setIsFinished(true);
+    const elapsedSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
     onFinish({
       questions,
       answers: answersRef.current,
       config,
+      elapsedSeconds,
     });
-  };
+  }, [config, isFinished, onFinish, questions]);
+
+  const isAnswerCorrect = useCallback(
+    (answer) => {
+      const expectedVariants = new Set(
+        getAnswerVariants(currentQuestion.correctAnswer)
+      );
+      const actualVariants = new Set(getAnswerVariants(answer));
+
+      return [...actualVariants].some((variant) => expectedVariants.has(variant));
+    },
+    [currentQuestion]
+  );
+
+  const handleSelect = useCallback(
+    (option) => {
+      if (selected !== null || !currentQuestion) return;
+
+      setSelected(option);
+      const isCorrect = isAnswerCorrect(option);
+      const newAnswer = {
+        question: currentQuestion.question,
+        correctAnswer: currentQuestion.correctAnswer,
+        selected: option,
+        isCorrect,
+        kanji: currentQuestion.kanji,
+        hiragana: currentQuestion.hiragana,
+        arti: currentQuestion.arti,
+      };
+
+      setTimeout(() => {
+        answersRef.current = [...answersRef.current, newAnswer];
+        setSelected(null);
+        setTypedAnswer("");
+        setSubmitted(false);
+
+        if (currentIndex + 1 < total) {
+          setCurrentIndex((i) => i + 1);
+        } else {
+          finishQuiz();
+        }
+      }, 550);
+    },
+    [currentIndex, currentQuestion, finishQuiz, isAnswerCorrect, selected, total]
+  );
+
+  const handleSubmitTextAnswer = useCallback(() => {
+    if (!typedAnswer.trim() || !currentQuestion || submitted) return;
+
+    const normalizedInput = typedAnswer.trim();
+    const isCorrect = isAnswerCorrect(normalizedInput);
+    const newAnswer = {
+      question: currentQuestion.question,
+      correctAnswer: currentQuestion.correctAnswer,
+      selected: normalizedInput,
+      isCorrect,
+      kanji: currentQuestion.kanji,
+      hiragana: currentQuestion.hiragana,
+      arti: currentQuestion.arti,
+    };
+
+    answersRef.current = [...answersRef.current, newAnswer];
+    setSubmitted(true);
+    setTimeout(() => {
+      setSubmitted(false);
+      setTypedAnswer("");
+
+      if (currentIndex + 1 < total) {
+        setCurrentIndex((i) => i + 1);
+      } else {
+        finishQuiz();
+      }
+    }, 700);
+  }, [currentIndex, currentQuestion, finishQuiz, isAnswerCorrect, submitted, total, typedAnswer]);
 
   useEffect(() => {
     if (config.timeLimitSeconds == null) return;
@@ -43,42 +128,17 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
   useEffect(() => {
     if (config.timeLimitSeconds == null) return;
-    if (timeLeft === 0) {
-      finishQuiz();
-    }
-  }, [timeLeft]);
+    if (timeLeft !== 0) return;
 
-  const handleSelect = (option) => {
-    if (selected !== null) return;
-
-    setSelected(option);
-    const isCorrect = option === currentQuestion.correctAnswer;
-    const newAnswer = {
-      question: currentQuestion.question,
-      correctAnswer: currentQuestion.correctAnswer,
-      selected: option,
-      isCorrect,
-      kanji: currentQuestion.kanji,
-      hiragana: currentQuestion.hiragana,
-      arti: currentQuestion.arti,
-    };
-
-    setTimeout(() => {
-      answersRef.current = [...answersRef.current, newAnswer];
-      setSelected(null);
-
-      if (currentIndex + 1 < total) {
-        setCurrentIndex((i) => i + 1);
-      } else {
-        finishQuiz();
-      }
-    }, 550);
-  };
+    const timer = setTimeout(() => { finishQuiz(); }, 0);
+    return () => clearTimeout(timer);
+  }, [config.timeLimitSeconds, finishQuiz, timeLeft]);
 
   useEffect(() => {
     if (!currentQuestion) return;
 
     const onKeyDown = (e) => {
+      if (isTextMode) return;
       const idx = Number(e.key) - 1;
       if (idx >= 0 && idx < currentQuestion.options.length) {
         handleSelect(currentQuestion.options[idx]);
@@ -87,7 +147,7 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentQuestion, selected]);
+  }, [currentQuestion, handleSelect, isTextMode]);
 
   if (!currentQuestion) {
     return (
@@ -117,6 +177,7 @@ export default function QuizPage({ config, onFinish, onExit }) {
       ? Math.round((timeLeft / config.timeLimitSeconds) * 100)
       : 0;
   const isLowTime = timeLeft != null && timeLeft <= 10;
+  const responseIsCorrect = submitted && isAnswerCorrect(typedAnswer);
 
   return (
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620] flex flex-col">
@@ -161,7 +222,7 @@ export default function QuizPage({ config, onFinish, onExit }) {
           )}
         </div>
 
-        <div className="h-[3px] w-full bg-[#e2d9c3] rounded-full mb-14 overflow-hidden">
+        <div className="h-0.75 w-full bg-[#e2d9c3] rounded-full mb-14 overflow-hidden">
           <div
             className="h-full bg-[#8a3a3a] rounded-full transition-all duration-300"
             style={{ width: `${((currentIndex + 1) / total) * 100}%` }}
@@ -179,50 +240,86 @@ export default function QuizPage({ config, onFinish, onExit }) {
             {currentQuestion.question}
           </p>
 
-          <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {currentQuestion.options.map((opt, i) => {
-              const isSelected = selected === opt;
-              const isCorrectOpt = opt === currentQuestion.correctAnswer;
-              const showFeedback = selected !== null;
+          {isTextMode ? (
+            <div className="w-full max-w-md">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={typedAnswer}
+                  onChange={(e) => setTypedAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSubmitTextAnswer();
+                  }}
+                  placeholder="Ketik jawabanmu..."
+                  className="input input-bordered w-full h-14 rounded-lg border-[#e2d9c3] bg-white/40 px-4 text-base text-[#2b2620] placeholder:text-[#a39d8a] focus:border-[#8a3a3a] focus:outline-none"
+                  autoFocus
+                />
+              </div>
 
-              let stateClass =
-                "bg-transparent border-[#e2d9c3] text-[#2b2620] hover:border-[#8a3a3a] hover:bg-[#efe6d2]";
-              if (showFeedback && isCorrectOpt) {
-                stateClass =
-                  "bg-[#e9f2e7] border-[#4a7a4f] text-[#2b2620] hover:bg-[#e9f2e7]";
-              } else if (showFeedback && isSelected && !isCorrectOpt) {
-                stateClass =
-                  "bg-[#f6e6e3] border-[#8a3a3a] text-[#2b2620] hover:bg-[#f6e6e3]";
-              } else if (showFeedback) {
-                stateClass =
-                  "bg-transparent border-[#e2d9c3] text-[#2b2620]/40";
-              }
-
-              return (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-xs text-[#8a8371]">
+                  {submitted
+                    ? responseIsCorrect
+                      ? "Jawaban benar"
+                      : "Jawaban salah"
+                    : "Jawaban bisa ditulis dengan atau tanpa tanda strip"}
+                </span>
                 <button
-                  key={i}
                   type="button"
-                  onClick={() => handleSelect(opt)}
-                  disabled={selected !== null}
-                  className={`btn btn-block h-14 justify-between normal-case rounded-md border text-base font-normal transition-colors px-4 ${stateClass}`}
+                  onClick={handleSubmitTextAnswer}
+                  disabled={!typedAnswer.trim() || submitted}
+                  className="btn h-11 rounded-lg border-none bg-[#211d16] text-white hover:bg-[#332c1f] disabled:bg-[#ebe5d5] disabled:text-[#b3ac99]"
                 >
-                  <span className="flex items-center gap-3">
-                    <kbd className="kbd kbd-sm bg-[#f6f2e9] border-[#e2d9c3] text-[#8a8371]">
-                      {i + 1}
-                    </kbd>
-                    {opt}
-                  </span>
-
-                  {showFeedback && isCorrectOpt && (
-                    <CheckIcon className="text-[#4a7a4f]" />
-                  )}
-                  {showFeedback && isSelected && !isCorrectOpt && (
-                    <CrossIcon className="text-[#8a3a3a]" />
-                  )}
+                  {submitted ? "Lanjut..." : "Jawab"}
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {currentQuestion.options.map((opt, i) => {
+                const isSelected = selected === opt;
+                const isCorrectOpt = opt === currentQuestion.correctAnswer;
+                const showFeedback = selected !== null;
+
+                let stateClass =
+                  "bg-transparent border-[#e2d9c3] text-[#2b2620] hover:border-[#8a3a3a] hover:bg-[#efe6d2]";
+                if (showFeedback && isCorrectOpt) {
+                  stateClass =
+                    "bg-[#e9f2e7] border-[#4a7a4f] text-[#2b2620] hover:bg-[#e9f2e7]";
+                } else if (showFeedback && isSelected && !isCorrectOpt) {
+                  stateClass =
+                    "bg-[#f6e6e3] border-[#8a3a3a] text-[#2b2620] hover:bg-[#f6e6e3]";
+                } else if (showFeedback) {
+                  stateClass =
+                    "bg-transparent border-[#e2d9c3] text-[#2b2620]/40";
+                }
+
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleSelect(opt)}
+                    disabled={selected !== null}
+                    className={`btn btn-block h-14 justify-between normal-case rounded-md border text-base font-normal transition-colors px-4 ${stateClass}`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <kbd className="kbd kbd-sm bg-[#f6f2e9] border-[#e2d9c3] text-[#8a8371]">
+                        {i + 1}
+                      </kbd>
+                      {opt}
+                    </span>
+
+                    {showFeedback && isCorrectOpt && (
+                      <CheckIcon className="text-[#4a7a4f]" />
+                    )}
+                    {showFeedback && isSelected && !isCorrectOpt && (
+                      <CrossIcon className="text-[#8a3a3a]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

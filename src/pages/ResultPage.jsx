@@ -1,11 +1,52 @@
 export default function ResultPage({ result, onHome }) {
-  const { questions, answers } = result;
+  const { questions, answers, elapsedSeconds } = result;
   const total = questions.length;
   const answered = answers.length;
   const correct = answers.filter((a) => a.isCorrect).length;
   const wrong = answered - correct;
   const unanswered = total - answered;
   const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  const formatTime = (seconds) => {
+    if (!seconds) return "0 detik";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) return `${secs} detik`;
+    if (secs === 0) return `${mins} menit`;
+    return `${mins}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const getBadgeInfo = () => {
+    // Badge berdasarkan akurasi saja
+    if (percentage === 100) {
+      return {
+        emoji: "🌟",
+        label: "Perfect!",
+        color: "bg-transparent text-[#8a3a3a]",
+      };
+    }
+    if (percentage >= 80) {
+      return {
+        emoji: "🎉",
+        label: "Great Job!",
+        color: "bg-transparent text-[#4a7a4f]",
+      };
+    }
+    if (percentage >= 60) {
+      return {
+        emoji: "👍",
+        label: "Good Effort",
+        color: "bg-transparent text-[#8a8371]",
+      };
+    }
+    return {
+      emoji: "💪",
+      label: "Keep Learning",
+      color: "bg-transparent text-[#8a8371]",
+    };
+  };
+
+  const badge = getBadgeInfo();
 
   const detail = questions.map((q, i) => {
     const a = answers[i];
@@ -96,7 +137,20 @@ export default function ResultPage({ result, onHome }) {
               {unanswered}
             </div>
           </div>
+          <div className={`stat place-items-center py-4 border-l border-[#e2d9c3] ${badge.color}`}>
+            <div className="stat-title text-[#8a8371] text-[0.65rem] font-medium mb-1">{badge.label}</div>
+            <div className="stat-value text-2xl">{badge.emoji}</div>
+          </div>
         </div>
+
+        {elapsedSeconds !== undefined && (
+          <div className="card bg-[#efe6d2] border border-[#e2d9c3] mb-10">
+            <div className="card-body items-center text-center py-4">
+              <p className="text-xs text-[#8a8371] mb-1">⏱️ Waktu yang digunakan</p>
+              <p className="font-serif text-2xl text-[#8a3a3a]">{formatTime(elapsedSeconds)}</p>
+            </div>
+          </div>
+        )}
 
         <div className="mb-10">
           <h2 className="text-xs font-medium text-[#8a8371] mb-4">

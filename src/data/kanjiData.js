@@ -5,7 +5,7 @@ export const kanjiData = [
       { kanji: "人", hiragana: "ひと", arti: "Orang" },
       { kanji: "名前", hiragana: "なまえ", arti: "Nama" },
       { kanji: "前", hiragana: "まえ", arti: "Depan" },
-      { kanji: "午前", hiragana: "ごぜん", arti: "am (sblm jm 12)" },
+      { kanji: "午前", hiragana: "ごぜん", arti: "AM" },
       { kanji: "国", hiragana: "くに", arti: "Negara" },
       { kanji: "国際", hiragana: "こくさい", arti: "Internasional" },
       { kanji: "外国", hiragana: "がいこく", arti: "Luar negeri" },
@@ -143,7 +143,7 @@ export const kanjiData = [
       { kanji: "大学", hiragana: "だいがく", arti: "Universitas" },
       { kanji: "大人", hiragana: "おとな", arti: "Dewasa" },
       { kanji: "大切な", hiragana: "たいせつな", arti: "Penting" },
-      { kanji: "大変な", hiragana: "たいへんな", arti: "Berat (pekerjaan)" },
+      { kanji: "大変な", hiragana: "たいへんな", arti: "Berat" },
       { kanji: "小さい", hiragana: "ちいさい", arti: "Kecil" },
       { kanji: "学校", hiragana: "がっこう", arti: "Sekolah" },
       { kanji: "小学校", hiragana: "しょうがっこう", arti: "SD" },
@@ -157,7 +157,7 @@ export const kanjiData = [
       { kanji: "中学校", hiragana: "ちゅうがっこう", arti: "SMP" },
       { kanji: "低い", hiragana: "ひくい", arti: "Rendah" },
       { kanji: "後ろ", hiragana: "うしろ", arti: "Belakang" },
-      { kanji: "午後", hiragana: "ごご", arti: "Pm (stlh jm 12)" },
+      { kanji: "午後", hiragana: "ごご", arti: "Pm" },
       { kanji: "後", hiragana: "あと", arti: "Setelah" },
       { kanji: "横", hiragana: "よこ", arti: "Sebelah" },
       { kanji: "入ります", hiragana: "はいります", arti: "Masuk" },
@@ -701,6 +701,36 @@ export const kanjiData = [
   },
 ];
 export const getBabNumbers = () => kanjiData.map((b) => b.bab);
+
+export const normalizeAnswerValue = (value = "") =>
+  String(value)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[~～]/g, "")
+    .replace(/[-–—_]/g, " ")
+    .replace(/[.,!?;:()[\]{}]/g, "")
+    .replace(/\u2026/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const getAnswerVariants = (value = "") => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  const variants = new Set();
+  const parts = raw.split("/");
+
+  parts.forEach((part) => {
+    const normalized = normalizeAnswerValue(part);
+    if (normalized) variants.add(normalized);
+  });
+
+  const base = normalizeAnswerValue(raw);
+  if (base) variants.add(base);
+
+  return [...variants];
+};
+
 export const getKanjiByBabs = (babList = []) => {
   const babSet = new Set(babList);
   return kanjiData
@@ -741,7 +771,12 @@ export const generateQuiz = ({
   const selected = shuffleArray(pool).slice(0, jumlah);
 
   return selected.map((item) => {
-    const distractorPool = pool.filter((p) => p[answerType] !== item[answerType]);
+    const correctVariants = new Set(getAnswerVariants(item[answerType]));
+    const distractorPool = pool.filter((p) => {
+      const candidateVariants = getAnswerVariants(p[answerType]);
+      return !candidateVariants.some((variant) => correctVariants.has(variant));
+    });
+
     const distractors = shuffleArray(distractorPool)
       .slice(0, Math.max(jumlahPilihan - 1, 0))
       .map((p) => p[answerType]);
