@@ -1,11 +1,44 @@
+import { useMemo, useState } from "react";
+
 export default function ResultPage({ result, onHome }) {
-  const { questions, answers, elapsedSeconds } = result;
+  const { questions = [], answers = [], elapsedSeconds } = result ?? {};
   const total = questions.length;
   const answered = answers.length;
   const correct = answers.filter((a) => a.isCorrect).length;
   const wrong = answered - correct;
   const unanswered = total - answered;
   const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  const babList = useMemo(() => {
+    const selected = result?.config?.babList ?? [];
+    const fromQuestions = questions.map((q) => q.bab).filter((bab) => bab != null);
+    const merged = [...new Set([...selected, ...fromQuestions])];
+    return merged.sort((a, b) => a - b);
+  }, [questions, result?.config?.babList]);
+
+  const babStats = useMemo(() => {
+    return babList.map((bab) => {
+      const babEntries = questions
+        .map((q, index) => ({ question: q, answer: answers[index], index }))
+        .filter(({ question }) => question.bab === bab);
+
+      const babCorrect = babEntries.filter(({ answer }) => answer?.isCorrect).length;
+
+      return {
+        bab,
+        total: babEntries.length,
+        correct: babCorrect,
+        answered: babEntries.filter(({ answer }) => answer).length,
+        entries: babEntries,
+      };
+    });
+  }, [answers, babList, questions]);
+
+  const [activeBab, setActiveBab] = useState(babList[0] ?? null);
+  const resolvedActiveBab = babList.includes(activeBab) ? activeBab : babList[0] ?? null;
+
+  const activeBabStats =
+    babStats.find((stat) => stat.bab === resolvedActiveBab) ?? babStats[0] ?? null;
 
   const formatTime = (seconds) => {
     if (!seconds) return "0 detik";
@@ -17,7 +50,6 @@ export default function ResultPage({ result, onHome }) {
   };
 
   const getBadgeInfo = () => {
-    // Badge berdasarkan akurasi saja
     if (percentage === 100) {
       return {
         emoji: "🌟",
@@ -48,26 +80,31 @@ export default function ResultPage({ result, onHome }) {
 
   const badge = getBadgeInfo();
 
-  const detail = questions.map((q, i) => {
-    const a = answers[i];
-    if (!a) {
-      return {
-        status: "unanswered",
-        kanji: q.kanji,
-        hiragana: q.hiragana,
-        arti: q.arti,
-        correctAnswer: q.correctAnswer,
-      };
-    }
-    return {
-      status: a.isCorrect ? "correct" : "wrong",
-      kanji: a.kanji,
-      hiragana: a.hiragana,
-      arti: a.arti,
-      correctAnswer: a.correctAnswer,
-      selected: a.selected,
-    };
-  });
+  const detail = activeBabStats
+    ? activeBabStats.entries.map(({ question, answer, index }) => {
+        if (!answer) {
+          return {
+            status: "unanswered",
+            kanji: question.kanji,
+            hiragana: question.hiragana,
+            arti: question.arti,
+            correctAnswer: question.correctAnswer,
+            bab: question.bab,
+            index,
+          };
+        }
+        return {
+          status: answer.isCorrect ? "correct" : "wrong",
+          kanji: answer.kanji,
+          hiragana: answer.hiragana,
+          arti: answer.arti,
+          correctAnswer: answer.correctAnswer,
+          selected: answer.selected,
+          bab: question.bab,
+          index,
+        };
+      })
+    : [];
 
   return (
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620]">
@@ -152,16 +189,51 @@ export default function ResultPage({ result, onHome }) {
           </div>
         )}
 
-        <div className="mb-10">
+        <div className="mb-8">
           <h2 className="text-xs font-medium text-[#8a8371] mb-4">
-            RINCIAN JAWABAN
+            HASIL PER BAB
           </h2>
-          <div className="flex flex-col gap-2">
-            {detail.map((d, i) => (
-              <DetailRow key={i} d={d} />
-            ))}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {babStats.map(({ bab, total: babTotal, correct: babCorrect }) => {
+              const active = resolvedActiveBab === bab;
+              return (
+                <button
+                  key={bab}
+                  type="button"
+                  onClick={() => setActiveBab(bab)}
+                  className={`text-left rounded-xl border p-4 transition-colors ${
+                    active
+                      ? "border-[#8a3a3a] bg-[#efe6d2]"
+                      : "border-[#e2d9c3] bg-white/50 hover:border-[#8a3a3a]/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-[#2b2620]">Bab {bab}</span>
+                    <span className="badge border-none bg-[#f3e8d9] text-[#8a3a3a] text-[11px] font-normal">
+                      {babCorrect}/{babTotal}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-[#6b6459]">
+                    Benar: <span className="font-medium text-[#2b2620]">{babCorrect}</span> / {babTotal}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        {activeBabStats && (
+          <div className="mb-10">
+            <h2 className="text-xs font-medium text-[#8a8371] mb-4">
+              DETAIL BAB {activeBabStats.bab}
+            </h2>
+            <div className="flex flex-col gap-2">
+              {detail.map((d, i) => (
+                <DetailRow key={`${d.bab}-${d.index ?? i}`} d={d} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -65,6 +65,11 @@ export default function Home({ onNavigate }) {
               primary
             />
             <MenuButton
+              label="Mulai Flashcard"
+              description="Belajar kanji dengan pendekatan self-recall"
+              onClick={() => onNavigate("flashcard-setup")}
+            />
+            <MenuButton
               label="Daftar Kanji"
               description="Lihat semua kanji per bab"
               onClick={() => onNavigate("daftar-kanji")}
