@@ -1,21 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getKanjiByBabs, shuffleArray } from "../data/kanjiData";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getKanjiByBabs } from "../data/kanjiData";
+import {
+  applyRating,
+  buildQueue,
+  cardKey,
+  loadProgress,
+  saveProgress,
+} from "../utils/srs";
 
 const FLIP_MS = 750;
+const MAX_REPEATS = 3; // maksimal kartu diulang dalam satu sesi
+const GAP_AGAIN = 3; // "Tidak hafal" muncul lagi 3 kartu kemudian
+const GAP_HARD = 8; // "Sulit" muncul lagi 8 kartu kemudian
+
+const makeSession = (babList) => {
+  const queue = buildQueue(getKanjiByBabs(babList ?? []), loadProgress());
+  return { queue, total: queue.length };
+};
 
 export default function FlashcardPage({ config, onExit, onBack }) {
-  const cards = useMemo(() => {
-    const pool = getKanjiByBabs(config?.babList ?? []);
-    return shuffleArray(pool);
-  }, [config?.babList]);
-
-  // frontIndex = kartu di sisi depan, backIndex = kartu di sisi belakang.
-  // Keduanya dipisah supaya saat kartu berputar balik, jawaban baru tidak bocor.
-  const [frontIndex, setFrontIndex] = useState(0);
-  const [backIndex, setBackIndex] = useState(0);
+  const [session, setSession] = useState(() => makeSession(config?.babList));
+  const [backCard, setBackCard] = useState(() => session.queue[0]);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [struggled, setStruggled] = useState(0);
+
+  const progressRef = useRef(loadProgress());
+  const repeatsRef = useRef({});
+  const struggledRef = useRef(new Set());
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -24,44 +37,74 @@ export default function FlashcardPage({ config, onExit, onBack }) {
     };
   }, []);
 
-  const frontCard = cards[frontIndex];
-  const backCard = cards[backIndex] ?? frontCard;
-  const total = cards.length;
-  const isLastCard = frontIndex === total - 1;
+  const { queue, total } = session;
+  const frontCard = queue[0];
+  const shownBack = backCard ?? frontCard;
+  const done = total - queue.length;
 
   const handleReveal = useCallback(() => {
     if (busy) return;
     setShowAnswer(true);
   }, [busy]);
 
-  const handleNext = useCallback(() => {
-    if (!showAnswer || busy) return;
+  const handleRate = useCallback(
+    (rating) => {
+      if (!showAnswer || busy || !frontCard) return;
 
-    if (frontIndex + 1 >= total) {
-      setIsCompleted(true);
-      return;
-    }
+      const key = cardKey(frontCard);
 
-    const nextIndex = frontIndex + 1;
-    setBusy(true);
-    setFrontIndex(nextIndex); // sisi depan langsung kartu baru (masih tersembunyi)
-    setShowAnswer(false); // kartu berputar balik ke depan
+      // simpan progres antar hari
+      progressRef.current = {
+        ...progressRef.current,
+        [key]: applyRating(progressRef.current[key], rating),
+      };
+      saveProgress(progressRef.current);
 
-    // Setelah putaran selesai, sisi belakang baru boleh diganti
-    timerRef.current = setTimeout(() => {
-      setBackIndex(nextIndex);
-      setBusy(false);
-    }, FLIP_MS);
-  }, [showAnswer, busy, frontIndex, total]);
+      // susun ulang antrean sesi
+      const rest = queue.slice(1);
+      if (rating === "again" || rating === "hard") {
+        struggledRef.current.add(key);
+        const used = repeatsRef.current[key] ?? 0;
+        if (used < MAX_REPEATS) {
+          repeatsRef.current[key] = used + 1;
+          const gap = rating === "again" ? GAP_AGAIN : GAP_HARD;
+          rest.splice(Math.min(gap, rest.length), 0, frontCard);
+        }
+      }
+
+      if (rest.length === 0) {
+        setSession({ queue: rest, total });
+        setStruggled(struggledRef.current.size);
+        setIsCompleted(true);
+        return;
+      }
+
+      setBusy(true);
+      setSession({ queue: rest, total });
+      setShowAnswer(false); // kartu berputar balik ke depan
+
+      // sisi belakang baru diganti setelah putaran selesai (jawaban tidak bocor)
+      timerRef.current = setTimeout(() => {
+        setBackCard(rest[0]);
+        setBusy(false);
+      }, FLIP_MS);
+    },
+    [showAnswer, busy, frontCard, queue, total]
+  );
 
   const handleRestart = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setFrontIndex(0);
-    setBackIndex(0);
+    const fresh = makeSession(config?.babList);
+    progressRef.current = loadProgress();
+    repeatsRef.current = {};
+    struggledRef.current = new Set();
+    setSession(fresh);
+    setBackCard(fresh.queue[0]);
     setShowAnswer(false);
     setBusy(false);
+    setStruggled(0);
     setIsCompleted(false);
-  }, []);
+  }, [config?.babList]);
 
   if (!frontCard && !isCompleted) {
     return (
@@ -90,8 +133,13 @@ export default function FlashcardPage({ config, onExit, onBack }) {
         <div className="max-w-lg w-full bg-[#faf8f2] border border-[#e4ddc9] rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(58,54,48,0.25)] p-6 sm:p-8 text-center">
           <p className="text-xs tracking-[0.18em] text-[#8a3a3a] uppercase mb-3">Selesai</p>
           <h2 className="font-serif text-2xl sm:text-4xl mb-3">Flashcard selesai</h2>
+          <p className="text-sm text-[#6b6459] leading-7 mb-2">
+            Kamu telah menyelesaikan {total} kartu dari bab yang dipilih.
+          </p>
           <p className="text-sm text-[#6b6459] leading-7 mb-7">
-            Kamu telah menyelesaikan semua kartu dari bab yang dipilih. Tetap konsisten dan ulangi sesi ini pada hari berikutnya untuk memperkuat ingatan.
+            {struggled > 0
+              ? `${struggled} kartu sempat terasa sulit dan akan muncul lebih awal di sesi berikutnya.`
+              : "Semua kartu langsung kamu kuasai. Mantap!"}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -116,7 +164,7 @@ export default function FlashcardPage({ config, onExit, onBack }) {
   }
 
   const charCount = [...(frontCard.kanji ?? "")].length || 1;
-  const hiraCount = [...(backCard.hiragana ?? "")].length || 1;
+  const hiraCount = [...(shownBack.hiragana ?? "")].length || 1;
 
   return (
     <div className="min-h-[100dvh] bg-[#f6f2e9] text-[#2b2620] flex flex-col">
@@ -132,13 +180,13 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           </button>
 
           <span className="badge justify-self-center whitespace-nowrap bg-[#efe6d2] border-[#e2d9c3] text-[#6b6459] font-normal text-[11px] sm:text-xs px-3 py-1.5">
-            {frontIndex + 1}
+            {done}
             <span className="text-[#c9c1ac] mx-1">/</span>
             {total}
           </span>
 
           <span className="badge justify-self-end whitespace-nowrap border-none bg-[#f3e8d9] text-[#8a3a3a] text-[11px] sm:text-xs px-2 py-1.5">
-            Self recall
+            Dikuasai
           </span>
         </div>
 
@@ -159,8 +207,8 @@ export default function FlashcardPage({ config, onExit, onBack }) {
 
                 <div className="fc-face fc-back">
                   <div className="fc-label">Belakang</div>
-                  <div className="fc-hiragana">{backCard.hiragana}</div>
-                  <div className="fc-meaning">{backCard.arti}</div>
+                  <div className="fc-hiragana">{shownBack.hiragana}</div>
+                  <div className="fc-meaning">{shownBack.arti}</div>
                 </div>
               </div>
             </div>
@@ -175,13 +223,29 @@ export default function FlashcardPage({ config, onExit, onBack }) {
                 Tampilkan Jawaban
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="fc-btn bg-[#211d16] hover:bg-[#332c1f]"
-              >
-                {isLastCard ? "Selesai" : "Selanjutnya"}
-              </button>
+              <div className="fc-rate">
+                <button
+                  type="button"
+                  onClick={() => handleRate("again")}
+                  className="fc-btn bg-[#8a3a3a] hover:bg-[#752f2f]"
+                >
+                  Tidak hafal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRate("hard")}
+                  className="fc-btn bg-[#b7822f] hover:bg-[#9c6d26]"
+                >
+                  Sulit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRate("good")}
+                  className="fc-btn bg-[#3f6b4a] hover:bg-[#345a3e]"
+                >
+                  Normal
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -270,17 +334,24 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           overflow-wrap: anywhere;
         }
 
+        .fc-rate {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.5rem;
+        }
+
         .fc-btn {
           width: 100%;
           height: clamp(2.5rem, 6dvh, 3rem);
           border: none;
           border-radius: 0.6rem;
           color: #fff;
-          font-size: clamp(0.85rem, 2.4vw, 1rem);
+          font-size: clamp(0.78rem, 2.4vw, 1rem);
           font-weight: 600;
           cursor: pointer;
           transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
         }
+        .fc-rate .fc-btn { font-size: clamp(0.72rem, 2.9vw, 0.9rem); padding: 0 0.25rem; }
         .fc-btn:active { transform: scale(0.98); }
         .fc-btn:disabled { cursor: default; opacity: 0.6; }
       `}</style>
