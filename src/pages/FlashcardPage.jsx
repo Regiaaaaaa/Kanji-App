@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getKanjiByBabs, shuffleArray } from "../data/kanjiData";
+
+const FLIP_MS = 750;
 
 export default function FlashcardPage({ config, onExit, onBack }) {
   const cards = useMemo(() => {
@@ -7,37 +9,61 @@ export default function FlashcardPage({ config, onExit, onBack }) {
     return shuffleArray(pool);
   }, [config?.babList]);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // frontIndex = kartu di sisi depan, backIndex = kartu di sisi belakang.
+  // Keduanya dipisah supaya saat kartu berputar balik, jawaban baru tidak bocor.
+  const [frontIndex, setFrontIndex] = useState(0);
+  const [backIndex, setBackIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const timerRef = useRef(null);
 
-  const currentCard = cards[currentIndex];
-  const total = cards.length;
-  const isLastCard = currentIndex === total - 1;
-
-  const handleReveal = useCallback(() => {
-    setShowAnswer(true);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []);
 
-  const handleNext = useCallback(() => {
-    if (!showAnswer) return;
+  const frontCard = cards[frontIndex];
+  const backCard = cards[backIndex] ?? frontCard;
+  const total = cards.length;
+  const isLastCard = frontIndex === total - 1;
 
-    if (currentIndex + 1 < total) {
-      setCurrentIndex((prev) => prev + 1);
-      setShowAnswer(false);
+  const handleReveal = useCallback(() => {
+    if (busy) return;
+    setShowAnswer(true);
+  }, [busy]);
+
+  const handleNext = useCallback(() => {
+    if (!showAnswer || busy) return;
+
+    if (frontIndex + 1 >= total) {
+      setIsCompleted(true);
       return;
     }
 
-    setIsCompleted(true);
-  }, [currentIndex, showAnswer, total]);
+    const nextIndex = frontIndex + 1;
+    setBusy(true);
+    setFrontIndex(nextIndex); // sisi depan langsung kartu baru (masih tersembunyi)
+    setShowAnswer(false); // kartu berputar balik ke depan
+
+    // Setelah putaran selesai, sisi belakang baru boleh diganti
+    timerRef.current = setTimeout(() => {
+      setBackIndex(nextIndex);
+      setBusy(false);
+    }, FLIP_MS);
+  }, [showAnswer, busy, frontIndex, total]);
 
   const handleRestart = useCallback(() => {
-    setCurrentIndex(0);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setFrontIndex(0);
+    setBackIndex(0);
     setShowAnswer(false);
+    setBusy(false);
     setIsCompleted(false);
   }, []);
 
-  if (!currentCard && !isCompleted) {
+  if (!frontCard && !isCompleted) {
     return (
       <div className="min-h-[100dvh] bg-[#f6f2e9] flex items-center justify-center px-4">
         <div className="max-w-sm w-full text-center">
@@ -89,8 +115,8 @@ export default function FlashcardPage({ config, onExit, onBack }) {
     );
   }
 
-  const charCount = [...(currentCard.kanji ?? "")].length || 1;
-  const hiraCount = [...(currentCard.hiragana ?? "")].length || 1;
+  const charCount = [...(frontCard.kanji ?? "")].length || 1;
+  const hiraCount = [...(backCard.hiragana ?? "")].length || 1;
 
   return (
     <div className="min-h-[100dvh] bg-[#f6f2e9] text-[#2b2620] flex flex-col">
@@ -106,7 +132,7 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           </button>
 
           <span className="badge justify-self-center whitespace-nowrap bg-[#efe6d2] border-[#e2d9c3] text-[#6b6459] font-normal text-[11px] sm:text-xs px-3 py-1.5">
-            {currentIndex + 1}
+            {frontIndex + 1}
             <span className="text-[#c9c1ac] mx-1">/</span>
             {total}
           </span>
@@ -122,21 +148,19 @@ export default function FlashcardPage({ config, onExit, onBack }) {
             style={{ "--chars": charCount, "--hchars": hiraCount }}
           >
             <div className="fc-scene">
-              {/* key={currentIndex}: kartu baru selalu mulai dari sisi depan tanpa animasi balik */}
               <div
-                key={currentIndex}
                 className={`fc-inner ${showAnswer ? "is-flipped" : ""}`}
                 aria-live="polite"
               >
                 <div className="fc-face fc-front">
                   <div className="fc-label">Depan</div>
-                  <div className="fc-kanji">{currentCard.kanji}</div>
+                  <div className="fc-kanji">{frontCard.kanji}</div>
                 </div>
 
                 <div className="fc-face fc-back">
                   <div className="fc-label">Belakang</div>
-                  <div className="fc-hiragana">{currentCard.hiragana}</div>
-                  <div className="fc-meaning">{currentCard.arti}</div>
+                  <div className="fc-hiragana">{backCard.hiragana}</div>
+                  <div className="fc-meaning">{backCard.arti}</div>
                 </div>
               </div>
             </div>
@@ -145,6 +169,7 @@ export default function FlashcardPage({ config, onExit, onBack }) {
               <button
                 type="button"
                 onClick={handleReveal}
+                disabled={busy}
                 className="fc-btn bg-[#8a3a3a] hover:bg-[#752f2f]"
               >
                 Tampilkan Jawaban
@@ -163,8 +188,6 @@ export default function FlashcardPage({ config, onExit, onBack }) {
       </div>
 
       <style>{`
-        /* --w = lebar kartu. Semua ukuran font & padding dihitung dari --w,
-           jadi teks selalu pas di dalam kartu di layar apa pun. */
         .fc-wrap {
           --w: max(11rem, min(86vw, 18rem, calc((100dvh - 15rem) * 5 / 6)));
           width: var(--w);
@@ -185,8 +208,7 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           height: 100%;
           transform-style: preserve-3d;
           -webkit-transform-style: preserve-3d;
-          transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
-          animation: fc-enter 0.25s ease-out;
+          transition: transform ${FLIP_MS}ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .fc-inner.is-flipped {
@@ -223,7 +245,6 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           color: #8a8371;
         }
 
-        /* Kanji mengecil otomatis sesuai jumlah karakter (maks 80% lebar kartu) */
         .fc-kanji {
           font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", "Times New Roman", serif;
           font-size: min(calc(var(--w) * 0.38), calc(var(--w) * 0.8 / var(--chars)));
@@ -240,7 +261,6 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           color: #2b2620;
         }
 
-        /* Arti boleh turun baris supaya tidak meluber */
         .fc-meaning {
           max-width: 100%;
           font-size: clamp(0.85rem, calc(var(--w) * 0.065), 1.25rem);
@@ -259,14 +279,10 @@ export default function FlashcardPage({ config, onExit, onBack }) {
           font-size: clamp(0.85rem, 2.4vw, 1rem);
           font-weight: 600;
           cursor: pointer;
-          transition: background-color 0.2s, transform 0.1s;
+          transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
         }
         .fc-btn:active { transform: scale(0.98); }
-
-        @keyframes fc-enter {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
+        .fc-btn:disabled { cursor: default; opacity: 0.6; }
       `}</style>
     </div>
   );
