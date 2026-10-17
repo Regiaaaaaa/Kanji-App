@@ -19,16 +19,27 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
   const answersRef = useRef([]);
   const startTimeRef = useRef(null);
-  
+  const textInputRef = useRef(null);
+  const currentQuestion = questions[currentIndex];
+  const total = questions.length;
+  const isTextMode = config.answerMode === "text";
+
   useEffect(() => {
     if (startTimeRef.current === null) {
       startTimeRef.current = Date.now();
     }
   }, []);
 
-  const currentQuestion = questions[currentIndex];
-  const total = questions.length;
-  const isTextMode = config.answerMode === "text";
+  useEffect(() => {
+    if (!isTextMode || submitted) return;
+    if (textInputRef.current) {
+      textInputRef.current.focus();
+      textInputRef.current.setSelectionRange(
+        textInputRef.current.value.length,
+        textInputRef.current.value.length
+      );
+    }
+  }, [currentIndex, isTextMode, submitted]);
 
   const finishQuiz = useCallback(() => {
     if (isFinished) return;
@@ -103,17 +114,31 @@ export default function QuizPage({ config, onFinish, onExit }) {
 
     answersRef.current = [...answersRef.current, newAnswer];
     setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setTypedAnswer("");
 
-      if (currentIndex + 1 < total) {
-        setCurrentIndex((i) => i + 1);
-      } else {
-        finishQuiz();
-      }
-    }, 700);
+    if (isCorrect) {
+      setTimeout(() => {
+        setSubmitted(false);
+        setTypedAnswer("");
+
+        if (currentIndex + 1 < total) {
+          setCurrentIndex((i) => i + 1);
+        } else {
+          finishQuiz();
+        }
+      }, 700);
+    }
   }, [currentIndex, currentQuestion, finishQuiz, isAnswerCorrect, submitted, total, typedAnswer]);
+
+  const goToNextQuestion = useCallback(() => {
+    setSubmitted(false);
+    setTypedAnswer("");
+
+    if (currentIndex + 1 < total) {
+      setCurrentIndex((i) => i + 1);
+    } else {
+      finishQuiz();
+    }
+  }, [currentIndex, finishQuiz, total]);
 
   useEffect(() => {
     if (config.timeLimitSeconds == null) return;
@@ -178,6 +203,7 @@ export default function QuizPage({ config, onFinish, onExit }) {
       : 0;
   const isLowTime = timeLeft != null && timeLeft <= 10;
   const responseIsCorrect = submitted && isAnswerCorrect(typedAnswer);
+  const currentCorrectAnswer = currentQuestion?.correctAnswer || "";
 
   return (
     <div className="min-h-screen bg-[#f6f2e9] text-[#2b2620] flex flex-col">
@@ -244,33 +270,73 @@ export default function QuizPage({ config, onFinish, onExit }) {
             <div className="w-full max-w-md">
               <div className="relative">
                 <input
+                  ref={textInputRef}
                   type="text"
                   value={typedAnswer}
                   onChange={(e) => setTypedAnswer(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSubmitTextAnswer();
+                    if (e.key === "Enter") {
+                      if (submitted && !responseIsCorrect) {
+                        goToNextQuestion();
+                        return;
+                      }
+
+                      handleSubmitTextAnswer();
+                    }
                   }}
                   placeholder="Ketik jawabanmu..."
-                  className="input input-bordered w-full h-14 rounded-lg border-[#e2d9c3] bg-white/40 px-4 text-base text-[#2b2620] placeholder:text-[#a39d8a] focus:border-[#8a3a3a] focus:outline-none"
+                  className="input input-bordered w-full h-14 rounded-xl border-[#e2d9c3] bg-white/80 px-4 text-base text-[#2b2620] shadow-sm shadow-[#f0e8dc] placeholder:text-[#a39d8a] focus:border-[#8a3a3a] focus:shadow-md focus:shadow-[#ecd7d1] focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                   autoFocus
+                  disabled={submitted}
                 />
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="text-xs text-[#8a8371]">
-                  {submitted
+              <div className={`mt-4 rounded-xl border px-3 py-2.5 text-left shadow-sm ${
+                  submitted
                     ? responseIsCorrect
-                      ? "Jawaban benar"
-                      : "Jawaban salah"
-                    : "Jawaban bisa ditulis dengan atau tanpa tanda strip"}
-                </span>
+                      ? "border-[#dfeadf] bg-[#f4faf4] text-[#355a3d]"
+                      : "border-[#ead7d4] bg-[#fff8f6] text-[#6d3b3b]"
+                    : "border-[#eee5d7] bg-[#faf7f1] text-[#5d564b]"
+                }`}>
+                {submitted ? (
+                  responseIsCorrect ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#dfeadf] text-[11px] font-bold text-[#355a3d]">✓</span>
+                      <span className="font-medium">Jawaban benar</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#f2d7d5] text-[11px] font-bold text-[#7c3b3b]">✕</span>
+                        <span className="font-medium">Jawaban salah</span>
+                      </div>
+                      <p className="text-xs text-[#7c3b3b]">
+                        Jawaban yang benar: <span className="font-semibold">{currentCorrectAnswer}</span>
+                      </p>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-xs leading-relaxed">
+                    Jawaban bisa ditulis dengan atau tanpa tanda strip
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={handleSubmitTextAnswer}
-                  disabled={!typedAnswer.trim() || submitted}
-                  className="btn h-11 rounded-lg border-none bg-[#211d16] text-white hover:bg-[#332c1f] disabled:bg-[#ebe5d5] disabled:text-[#b3ac99]"
+                  onClick={() => {
+                    if (submitted && !responseIsCorrect) {
+                      goToNextQuestion();
+                      return;
+                    }
+
+                    handleSubmitTextAnswer();
+                  }}
+                  disabled={!typedAnswer.trim() || (submitted && responseIsCorrect)}
+                  className="btn h-11 rounded-xl border-none bg-[#211d16] text-white hover:bg-[#332c1f] disabled:bg-[#ebe5d5] disabled:text-[#b3ac99]"
                 >
-                  {submitted ? "Lanjut..." : "Jawab"}
+                  {submitted ? (responseIsCorrect ? "Lanjut..." : "Lanjut") : "Jawab"}
                 </button>
               </div>
             </div>
